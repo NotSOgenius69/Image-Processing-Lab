@@ -82,6 +82,7 @@ kernel=LoG_kernel(sigma)
 convolved_image=convolve(image,kernel)
 zc=zero_crossing(convolved_image)
 var_map=local_variance_map(convolved_image,zc)
+normalized_result = cv2.normalize(var_map, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
 result=thresholding(var_map)
 #print('zero crossing:\n',zc)
 #print('local variance map:\n',var_map)
@@ -89,6 +90,7 @@ result=thresholding(var_map)
 
 cv2.imshow('Original Image',image)
 cv2.imshow('Convolved Image',convolved_image)
+cv2.imshow('After zero crossing',normalized_result)
 cv2.imshow('After thresholding',result)
 
 
