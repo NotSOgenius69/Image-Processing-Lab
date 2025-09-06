@@ -26,7 +26,7 @@ def convolve(image : np.array ,  kernel : np.array) -> np.array:
 
 
   
-image = cv2.imread(r'C:\Users\User\Downloads\box.jpg',cv2.IMREAD_GRAYSCALE)
+image = cv2.imread(r'E:\Image Processing Lab\box.jpg',cv2.IMREAD_GRAYSCALE)
 
 kernel = [[1,2,1],[3,2,1],[4,5,6]]
 kernel = np.array(kernel, dtype=np.float32)
@@ -42,8 +42,10 @@ ky = np.sqrt(S[0]) * Vt[0, :]     # horizontal vector
 kx = kx[:, np.newaxis]  
 ky = ky[np.newaxis, :]  
 
-
+print('After decomposing with SVD:')
+print('Convolving with Kx')
 temp=convolve(image,kx)
+print('Convolving with Ky')
 output=convolve(temp,ky)
 
 approx_convolved_result = cv2.normalize(output, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
@@ -51,18 +53,18 @@ approx_convolved_result = cv2.normalize(output, None, 0, 255, cv2.NORM_MINMAX).a
 
 rank1_approx = np.outer(kx,ky)
 
-print('Kernel',kernel)
+print('Actual Kernel:\n',kernel)
 
-print('Rank-1 approx',rank1_approx)
+print('Rank-1 approx:\n',rank1_approx)
 
 abs_error = np.abs(kernel-rank1_approx)
 
-print('Absolute error',abs_error)
+print('Absolute error:\n',abs_error)
 
 
 cv2.imshow("Original Image", image)
 cv2.imshow("Convolve Image",convolved_result)
-cv2.imshow("Approx Convolved Image",output)
+cv2.imshow("Approx Convolved Image",approx_convolved_result)
 
 
 cv2.waitKey(0)

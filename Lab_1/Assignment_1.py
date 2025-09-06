@@ -71,9 +71,9 @@ def individual_channel_convolution(image , kernel):
     smooth_convolved_image = cv2.merge((b_channel_convolved, g_channel_convolved, r_channel_convolved))
     normalized_result = cv2.normalize(smooth_convolved_image, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
     
-    cv2.imshow('Blue Channel',blue_channel)
-    cv2.imshow('Green Channel',green_channel)
-    cv2.imshow('Red Channel',red_channel)
+    #cv2.imshow('Blue Channel',blue_channel)
+    #cv2.imshow('Green Channel',green_channel)
+    #cv2.imshow('Red Channel',red_channel)
     
     return normalized_result
 
@@ -99,24 +99,22 @@ smoothing_kernel = Gaussian_Smoothing_kernel(5, 1.67)
 sharpening_kernel = Gaussian_Sharpenning_kernel(7, 1.67)
 
 smoothed_image=individual_channel_convolution(image,smoothing_kernel)
-#sharpened_image=individual_channel_convolution(image,sharpening_kernel)
+sharpened_image=individual_channel_convolution(image,sharpening_kernel)
 
-# hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-# smooth_hsv = individual_channel_convolution(hsv_image, smoothing_kernel)
-# sharp_hsv = individual_channel_convolution(hsv_image, sharpening_kernel)
-
-    
+#hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+#smooth_hsv = individual_channel_convolution(hsv_image, smoothing_kernel)
+#sharp_hsv = individual_channel_convolution(hsv_image, sharpening_kernel)
     
 
-
-cv2.imshow('Original Image',image)
-# cv2.imshow('Smooth HSV',smooth_hsv)
-# cv2.imshow('Sharp HSV',sharp_hsv)
-# cv2.imshow('Smoothed Image',smoothed_image)
-# cv2.imshow('Sharpened Image',sharpened_image)
-# cv2.imshow('Blue Channel',blue_img)
-# cv2.imshow('Green Channel',green_img)
-# cv2.imshow('Red Channel',red_img)
+#cv2.imshow('Original Image',image)
+#cv2.imshow('HSV Image',hsv_image)
+#cv2.imshow('Smooth HSV',smooth_hsv)
+#cv2.imshow('Sharp HSV',sharp_hsv)
+#cv2.imshow('Smoothed Image',smoothed_image)
+#cv2.imshow('Sharpened Image',sharpened_image)
+#cv2.imshow('Blue Channel',blue_img)
+#cv2.imshow('Green Channel',green_img)
+#cv2.imshow('Red Channel',red_img)
 
 
 
