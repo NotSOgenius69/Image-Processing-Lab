@@ -12,6 +12,11 @@ The assignment also visualizes the original and equalized images, their histogra
 
 <h2>Outputs</h2>
 
+<h3>Outputs of the RGB image</h3>
+<img width="1171" height="692" alt="image" src="https://github.com/user-attachments/assets/42a7f05e-b375-47d1-8fbe-c453c0f34d54" />
+<h3>Outputs of the HSV image</h3>
+<img width="1140" height="699" alt="image" src="https://github.com/user-attachments/assets/2ce409f6-e423-4dba-8c65-9d41c5ceea7c" />
+
 <h2>Conclusion</h2>
 We mainly compared the equalized image from two approach and show that the equalized image from hsv image is much more natural than the rgb equalized image.
 <hr>
@@ -29,6 +34,7 @@ In this assignment, histogram matching is performed to adjust the pixel intensit
 The assignment also visualizes and compares the original and matched images, their histograms, and CDFs using matplotlib.
 
 <h2>Outputs</h2>
+<img width="1120" height="693" alt="image" src="https://github.com/user-attachments/assets/644b87d6-d138-494e-8fbc-718f2b5fbb6a" />
 
 <h2>Conclusion</h2>
 Histogram matching effectively transforms the input image to have a pixel intensity distribution that closely resembles the target histogram. The visualizations confirm that the matched image's histogram aligns well with the target histogram, demonstrating the success of the histogram matching process.
