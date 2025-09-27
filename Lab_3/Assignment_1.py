@@ -46,7 +46,7 @@ out_cdf_b = calc_pdf_cdf(out_hist_b,h,w)
 out_cdf_g = calc_pdf_cdf(out_hist_g,h,w)
 out_cdf_r = calc_pdf_cdf(out_hist_r,h,w)
 
-plt.figure(figsize=(12,16))
+plt.figure(figsize=(12,20))
 plt.subplot(4,2,1)
 plt.title('Original Image')
 plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
@@ -75,6 +75,7 @@ show_plot('Green Channel CDF', cdf_g, 'green', 'Original', out_cdf_g, 'lightgree
 plt.subplot(4,2,8)
 show_plot('Red Channel CDF', cdf_r, 'red', 'Original', out_cdf_r, 'orange', 'Equalized')
 
+plt.subplots_adjust(hspace=0.5)
 plt.show()
 
 hsv_img=cv2.cvtColor(image,cv2.COLOR_BGR2HSV)
