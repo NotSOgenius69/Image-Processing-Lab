@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import os
 from glob import glob
+import matplotlib.pyplot as plt
 
 
 def calculate_hu_moments(image_path):
@@ -77,13 +78,6 @@ patch = input_img[center_y-2:center_y+3, center_x-2:center_x+3]
 print(f"\nExtracted 5x5 patch from center of Gray_Lena.jpg:")
 print(patch)
 
-# # Save the patch as an image (scaled up for visibility)
-# patch_scaled = cv2.resize(patch, (100, 100), interpolation=cv2.INTER_NEAREST)
-# patch_path = os.path.join(images_folder, 'patch_5x5.jpg')
-# cv2.imwrite(patch_path, patch_scaled)
-# print(f"\nPatch saved to: {patch_path}")
-
-
 M_translate = np.float32([[1, 0, 1], [0, 1, 1]])
 patch_translated = cv2.warpAffine(patch, M_translate, (5, 5))
 
@@ -140,4 +134,56 @@ if patch_distances:
     print(f"BEST MATCH for original patch: {best_patch_match}")
     print(f"Distance: {patch_distances[best_patch_match]:.6f}")
     print(f"{'*' * 60}")
+
+
+print("\n" + "=" * 80)
+print("Generating Visualization of All Images and Feature Vectors")
+print("=" * 80)
+
+image_groups = {
+    'Lena': ['Gray_Lena.jpg', 'translated_lena.jpg', 'mirrored_lena.jpg', 'rotated_45_lena.jpg', 'rotated_90_lena.jpg', 'half_size_lena.jpg'],
+    'Image 1': ['Gray_img1.jpg', 'translated_img1.jpg', 'mirrored_img1.jpg', 'rotated_45_img1.jpg', 'rotated_90_img1.jpg', 'half_size_img1.jpg'],
+    'Image 2': ['Gray_img2.jpg', 'translated_img2.jpg', 'mirrored_img2.jpg', 'rotated_45_img2.jpg', 'rotated_90_img2.jpg', 'half_size_img2.jpg'],
+    'Image 3': ['Gray_img3.jpg', 'translated_img3.jpg', 'mirrored_img3.jpg', 'rotated_45_img3.jpg', 'rotated_90_img3.jpg', 'half_size_img3.jpg']
+}
+
+transformation_labels = ['Original', 'Translated', 'Mirrored', 'Rotated 45°', 'Rotated 90°', 'Half Size']
+
+fig, axes = plt.subplots(4, 6, figsize=(24, 18))
+
+
+for col_idx, label in enumerate(transformation_labels):
+    fig.text((col_idx + 0.5) / 6, 0.96, label, ha='center', va='top', 
+             fontsize=7, fontweight='bold')
+
+for row_idx, (group_name, image_list) in enumerate(image_groups.items()):
+    for col_idx, img_name in enumerate(image_list):
+        ax = axes[row_idx, col_idx]
+        
+        
+        img_path = os.path.join(images_folder, img_name)
+        if os.path.exists(img_path):
+            img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+            ax.imshow(img, cmap='gray')
+            
+            
+            if img_name in feature_vectors:
+                features = feature_vectors[img_name]
+                
+                
+                feature_text = f"[{features[0]:.2e}, {features[1]:.2e}, {features[2]:.2e}, {features[3]:.2e}]"
+                ax.text(0.5, -0.12, feature_text, ha='center', va='top', 
+                       transform=ax.transAxes, fontsize=6.5, family='monospace',
+                       bbox=dict(boxstyle='round,pad=0.3', facecolor='lightblue', alpha=0.7))
+        else:
+            ax.text(0.5, 0.5, 'Image\nNot Found', ha='center', va='center', transform=ax.transAxes)
+        
+        ax.axis('off')
+        
+        if col_idx == 0:
+            ax.text(-0.2, 0.5, group_name, rotation=90, va='center', ha='right', 
+                   fontsize=14, fontweight='bold', transform=ax.transAxes)
+
+plt.subplots_adjust(left=0.05, right=0.98, top=0.94, bottom=0.02, hspace=0.4, wspace=0.5)
+plt.show()
 
