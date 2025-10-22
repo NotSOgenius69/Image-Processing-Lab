@@ -5,7 +5,7 @@ import cv2
 from PIL import Image, ImageTk
 import math
 import random
-from image_filters import apply_LoG_sharpen
+
 class ClueHuntingGame:
     def __init__(self, root):
         self.root = root
@@ -22,6 +22,16 @@ class ClueHuntingGame:
         
         self.image_history = []
         self.max_history = 10 
+        
+        self.gaussian_kernel_size = tk.IntVar(value=5)
+        self.gaussian_sigma = tk.DoubleVar(value=1.5)
+        self.median_kernel_size = tk.IntVar(value=5)
+        self.bilateral_d = tk.IntVar(value=9)
+        self.bilateral_sigma_color = tk.IntVar(value=75)
+        self.bilateral_sigma_space = tk.IntVar(value=75)
+        self.gamma_value = tk.DoubleVar(value=2.2)
+        self.contrast_alpha = tk.DoubleVar(value=1.5)
+        self.contrast_beta = tk.IntVar(value=30)
         
         self.level_clues = {
             1: {
@@ -84,45 +94,116 @@ class ClueHuntingGame:
         content_frame = ttk.Frame(main_frame)
         content_frame.pack(fill=tk.BOTH, expand=True)
         
-        tools_frame = ttk.LabelFrame(content_frame, text="Image Processing Tools", padding=10)
-        tools_frame.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 10))
+        tools_container = ttk.LabelFrame(content_frame, text="Image Processing Tools", padding=2)
+        tools_container.pack(side=tk.LEFT, fill=tk.BOTH, padx=(0, 10))
         
-        noise_frame = ttk.LabelFrame(tools_frame, text="Noise Reduction")
+        tools_canvas = tk.Canvas(tools_container, width=150, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(tools_container, orient="vertical", command=tools_canvas.yview)
+        tools_frame = ttk.Frame(tools_canvas)
+        
+        tools_frame.bind(
+            "<Configure>",
+            lambda e: tools_canvas.configure(scrollregion=tools_canvas.bbox("all"))
+        )
+        
+        tools_canvas.create_window((0, 0), window=tools_frame, anchor="nw")
+        tools_canvas.configure(yscrollcommand=scrollbar.set)
+        
+        tools_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        def _on_mousewheel(event):
+            tools_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        tools_canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        
+        noise_frame = ttk.LabelFrame(tools_frame, text="Noise Reduction", padding=5)
         noise_frame.pack(fill=tk.X, pady=(0, 10))
         
         ttk.Button(noise_frame, text="Gaussian Filter", 
                   command=self.apply_gaussian_filter).pack(fill=tk.X, pady=2)
+        
+        ttk.Label(noise_frame, text="Kernel Size:", font=("Arial", 8)).pack(anchor=tk.W, padx=5, pady=(5,0))
+        gaussian_k_scale = ttk.Scale(noise_frame, from_=3, to=15, orient=tk.HORIZONTAL,
+                                     variable=self.gaussian_kernel_size, command=self._round_odd)
+        gaussian_k_scale.pack(fill=tk.X, padx=5)
+        self.gaussian_k_label = ttk.Label(noise_frame, text="5", font=("Arial", 8))
+        self.gaussian_k_label.pack(anchor=tk.W, padx=5)
+        
+        ttk.Label(noise_frame, text="Sigma:", font=("Arial", 8)).pack(anchor=tk.W, padx=5, pady=(3,0))
+        gaussian_s_scale = ttk.Scale(noise_frame, from_=0.5, to=5.0, orient=tk.HORIZONTAL,
+                                     variable=self.gaussian_sigma, command=self._update_gaussian_sigma_label)
+        gaussian_s_scale.pack(fill=tk.X, padx=5)
+        self.gaussian_s_label = ttk.Label(noise_frame, text="1.5", font=("Arial", 8))
+        self.gaussian_s_label.pack(anchor=tk.W, padx=5, pady=(0,5))
+        
+        ttk.Separator(noise_frame, orient='horizontal').pack(fill=tk.X, pady=5)
+        
         ttk.Button(noise_frame, text="Median Filter", 
                   command=self.apply_median_filter).pack(fill=tk.X, pady=2)
+        
+        ttk.Label(noise_frame, text="Kernel Size:", font=("Arial", 8)).pack(anchor=tk.W, padx=5, pady=(5,0))
+        median_scale = ttk.Scale(noise_frame, from_=3, to=11, orient=tk.HORIZONTAL,
+                                variable=self.median_kernel_size, command=self._round_odd_median)
+        median_scale.pack(fill=tk.X, padx=5)
+        self.median_label = ttk.Label(noise_frame, text="5", font=("Arial", 8))
+        self.median_label.pack(anchor=tk.W, padx=5, pady=(0,5))
+        
+        ttk.Separator(noise_frame, orient='horizontal').pack(fill=tk.X, pady=5)
+        
         ttk.Button(noise_frame, text="Bilateral Filter", 
                   command=self.apply_bilateral_filter).pack(fill=tk.X, pady=2)
         
-        sharp_frame = ttk.LabelFrame(tools_frame, text="Sharpening")
+        sharp_frame = ttk.LabelFrame(tools_frame, text="Sharpening", padding=5)
         sharp_frame.pack(fill=tk.X, pady=(0, 10))
         
         ttk.Button(sharp_frame, text="Unsharp Masking", 
                   command=self.apply_unsharp_mask).pack(fill=tk.X, pady=2)
         ttk.Button(sharp_frame, text="Laplacian Sharpen", 
                   command=self.apply_laplacian_sharpen).pack(fill=tk.X, pady=2)
-        enhance_frame = ttk.LabelFrame(tools_frame, text="Enhancement")
+        
+        enhance_frame = ttk.LabelFrame(tools_frame, text="Enhancement", padding=5)
         enhance_frame.pack(fill=tk.X, pady=(0, 10))
     
         ttk.Button(enhance_frame, text="Gamma Correction", 
                   command=self.apply_gamma_correction).pack(fill=tk.X, pady=2)
+        
+        ttk.Label(enhance_frame, text="Gamma:", font=("Arial", 8)).pack(anchor=tk.W, padx=5, pady=(5,0))
+        gamma_scale = ttk.Scale(enhance_frame, from_=0.5, to=3.0, orient=tk.HORIZONTAL,
+                               variable=self.gamma_value, command=self._update_gamma_label)
+        gamma_scale.pack(fill=tk.X, padx=5)
+        self.gamma_label = ttk.Label(enhance_frame, text="2.2", font=("Arial", 8))
+        self.gamma_label.pack(anchor=tk.W, padx=5, pady=(0,5))
+        
+        ttk.Separator(enhance_frame, orient='horizontal').pack(fill=tk.X, pady=5)
+        
         ttk.Button(enhance_frame, text="Contrast Stretch", 
                   command=self.apply_contrast_stretch).pack(fill=tk.X, pady=2)
         
-        control_frame = ttk.Frame(tools_frame)
-        control_frame.pack(fill=tk.X, pady=10)
+        ttk.Label(enhance_frame, text="Alpha (Contrast):", font=("Arial", 8)).pack(anchor=tk.W, padx=5, pady=(5,0))
+        alpha_scale = ttk.Scale(enhance_frame, from_=0.5, to=3.0, orient=tk.HORIZONTAL,
+                               variable=self.contrast_alpha, command=self._update_alpha_label)
+        alpha_scale.pack(fill=tk.X, padx=5)
+        self.alpha_label = ttk.Label(enhance_frame, text="1.5", font=("Arial", 8))
+        self.alpha_label.pack(anchor=tk.W, padx=5)
+        
+        ttk.Label(enhance_frame, text="Beta (Brightness):", font=("Arial", 8)).pack(anchor=tk.W, padx=5, pady=(3,0))
+        beta_scale = ttk.Scale(enhance_frame, from_=-50, to=100, orient=tk.HORIZONTAL,
+                              variable=self.contrast_beta, command=self._update_beta_label)
+        beta_scale.pack(fill=tk.X, padx=5)
+        self.beta_label = ttk.Label(enhance_frame, text="30", font=("Arial", 8))
+        self.beta_label.pack(anchor=tk.W, padx=5, pady=(0,5))
+        
+        control_frame = ttk.LabelFrame(tools_frame, text="Controls", padding=5)
+        control_frame.pack(fill=tk.X, pady=(0, 10))
         
         ttk.Button(control_frame, text="Undo Last Action", 
-                  command=self.undo_last_action, style='Warning.TButton').pack(fill=tk.X, pady=2)
+                  command=self.undo_last_action).pack(fill=tk.X, pady=2)
         ttk.Button(control_frame, text="Reset Image", 
                   command=self.reset_image).pack(fill=tk.X, pady=2)
         ttk.Button(control_frame, text="Get Hint", 
                   command=self.show_hint).pack(fill=tk.X, pady=2)
         ttk.Button(control_frame, text="Submit Answer", 
-                  command=self.submit_answer, style='Accent.TButton').pack(fill=tk.X, pady=5)
+                  command=self.submit_answer).pack(fill=tk.X, pady=2)
         
         image_frame = ttk.Frame(content_frame)
         image_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
@@ -252,16 +333,45 @@ class ClueHuntingGame:
             self.image_history = [self.current_image.copy()]
             self.display_image()
     
+    def _round_odd(self, val):
+        value = int(float(val))
+        if value % 2 == 0:
+            value += 1
+        self.gaussian_kernel_size.set(value)
+        self.gaussian_k_label.config(text=str(value))
+    
+    def _round_odd_median(self, val):
+        value = int(float(val))
+        if value % 2 == 0:
+            value += 1
+        self.median_kernel_size.set(value)
+        self.median_label.config(text=str(value))
+    
+    def _update_gaussian_sigma_label(self, val):
+        self.gaussian_s_label.config(text=f"{float(val):.2f}")
+    
+    def _update_gamma_label(self, val):
+        self.gamma_label.config(text=f"{float(val):.2f}")
+    
+    def _update_alpha_label(self, val):
+        self.alpha_label.config(text=f"{float(val):.2f}")
+    
+    def _update_beta_label(self, val):
+        self.beta_label.config(text=str(int(float(val))))
+    
     def apply_gaussian_filter(self):
         if self.current_image is not None:
             self.save_to_history()
-            self.current_image=cv2.GaussianBlur(self.current_image, (5, 5), 1.5)
+            k_size = self.gaussian_kernel_size.get()
+            sigma = self.gaussian_sigma.get()
+            self.current_image=cv2.GaussianBlur(self.current_image, (k_size, k_size), sigma)
             self.display_image()
     
     def apply_median_filter(self):
         if self.current_image is not None:
-            self.save_to_history() 
-            self.current_image = cv2.medianBlur(self.current_image, 5)
+            self.save_to_history()
+            k_size = self.median_kernel_size.get()
+            self.current_image = cv2.medianBlur(self.current_image, k_size)
             self.display_image()
     
     def apply_bilateral_filter(self):
@@ -289,8 +399,8 @@ class ClueHuntingGame:
     def apply_gamma_correction(self):
         if self.current_image is not None:
             self.save_to_history()
-            gamma=2.2
-            inv_gamma=1.0/gamma
+            gamma = self.gamma_value.get()
+            inv_gamma = 1.0 / gamma
             table = np.array([((i/255.0)**inv_gamma)*255 
                             for i in np.arange(0, 256)]).astype("uint8")
             self.current_image = cv2.LUT(self.current_image, table)
@@ -298,8 +408,10 @@ class ClueHuntingGame:
     
     def apply_contrast_stretch(self):
         if self.current_image is not None:
-            self.save_to_history() 
-            self.current_image = cv2.convertScaleAbs(self.current_image, alpha=1.5, beta=30)
+            self.save_to_history()
+            alpha = self.contrast_alpha.get()
+            beta = self.contrast_beta.get()
+            self.current_image = cv2.convertScaleAbs(self.current_image, alpha=alpha, beta=beta)
             self.display_image()
     
     def show_hint(self):
