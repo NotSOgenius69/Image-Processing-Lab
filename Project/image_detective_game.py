@@ -61,8 +61,18 @@ class ImageDetectiveGame:
         
         ttk.Button(noise_frame, text="Gaussian Filter", 
                   command=self.apply_gaussian_filter).pack(fill=tk.X, pady=2)
+        self.gaussian_slider = ttk.Scale(noise_frame, from_=1, to=15, orient=tk.HORIZONTAL)
+        self.gaussian_slider.set(5)
+        self.gaussian_slider.pack(fill=tk.X, pady=2)
+        ttk.Label(noise_frame, text="Gaussian Kernel Size").pack()
+
         ttk.Button(noise_frame, text="Median Filter", 
                   command=self.apply_median_filter).pack(fill=tk.X, pady=2)
+        self.median_slider = ttk.Scale(noise_frame, from_=3, to=11, orient=tk.HORIZONTAL)
+        self.median_slider.set(5)
+        self.median_slider.pack(fill=tk.X, pady=2)
+        ttk.Label(noise_frame, text="Median Kernel Size").pack()
+
         ttk.Button(noise_frame, text="Bilateral Filter", 
                   command=self.apply_bilateral_filter).pack(fill=tk.X, pady=2)
         
@@ -83,6 +93,10 @@ class ImageDetectiveGame:
                   command=self.apply_histogram_eq).pack(fill=tk.X, pady=2)
         ttk.Button(enhance_frame, text="Gamma Correction", 
                   command=self.apply_gamma_correction).pack(fill=tk.X, pady=2)
+        self.gamma_slider = tk.Scale(enhance_frame, from_=0.5, to=2.5, orient=tk.HORIZONTAL, resolution=0.1)
+        self.gamma_slider.set(1.2)
+        self.gamma_slider.pack(fill=tk.X, pady=2)
+        ttk.Label(enhance_frame, text="Gamma Value").pack()
         
         # Control buttons
         ttk.Button(tools_frame, text="Reset Image", 
@@ -141,35 +155,55 @@ class ImageDetectiveGame:
     def apply_distortion(self):
         if self.original_image is None:
             return
-            
+
         img = self.original_image.copy()
-        
-        # Apply different distortions based on level
+
         if self.current_level == 1:
-            # Gaussian noise
-            noise = np.random.normal(0, 30, img.shape).astype(np.uint8)
-            img = cv2.add(img, noise)
-        elif self.current_level == 2:
-            # Motion blur
-            img = self.add_motion_blur(img, 15, 45)
-        elif self.current_level == 3:
-            # Gaussian blur
-            img = cv2.GaussianBlur(img, (15, 15), 5)
-        elif self.current_level == 4:
-            # Combination: noise + blur
-            noise = np.random.normal(0, 20, img.shape).astype(np.uint8)
-            img = cv2.add(img, noise)
-            img = cv2.GaussianBlur(img, (7, 7), 2)
-        else:
-            # Complex distortion
-            img = self.add_motion_blur(img, 10, 30)
-            noise = np.random.normal(0, 25, img.shape).astype(np.uint8)
-            img = cv2.add(img, noise)
+            # Moderate Gaussian blur
+            img = cv2.GaussianBlur(img, (9, 9), 3)
         
+        elif self.current_level == 2:
+            # Mild salt-and-pepper noise
+            s_vs_p = 0.5
+            amount = 0.02  # 2% pixels
+            out = img.copy()
+            num_salt = np.ceil(amount * img.size * s_vs_p / img.shape[2])
+            coords = [np.random.randint(0, i - 1, int(num_salt)) for i in img.shape[:2]]
+            out[coords[0], coords[1], :] = 255
+            num_pepper = np.ceil(amount * img.size * (1. - s_vs_p) / img.shape[2])
+            coords = [np.random.randint(0, i - 1, int(num_pepper)) for i in img.shape[:2]]
+            out[coords[0], coords[1], :] = 0
+            img = out
+
+        elif self.current_level == 3:
+            # Moderate contrast reduction
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb)
+            y, cr, cb = cv2.split(img)
+            y = cv2.normalize(y, None, 100, 150, cv2.NORM_MINMAX)
+            img = cv2.merge([y, cr, cb])
+            img = cv2.cvtColor(img, cv2.COLOR_YCrCb2BGR)
+
+        elif self.current_level == 4:
+            # Moderate gamma darkening
+            gamma = 1.6
+            table = np.array([((i / 255.0) ** gamma) * 255 for i in np.arange(0, 256)]).astype("uint8")
+            img = cv2.LUT(img, table)
+
+        elif self.current_level == 5:
+            # Mild Gaussian noise
+            noise = np.random.normal(0, 10, img.shape).astype(np.float32)
+            img = img.astype(np.float32) + noise
+            img = np.clip(img, 0, 255).astype(np.uint8)
+
+        else:
+            img = cv2.GaussianBlur(img, (5, 5), 1)
+            noise = np.random.normal(0, 5, img.shape).astype(np.float32)
+            img = img.astype(np.float32) + noise
+            img = np.clip(img, 0, 255).astype(np.uint8)
+
         self.distorted_image = img
         self.current_image = img.copy()
         self.display_image()
-    
     
     def display_image(self):
         if self.current_image is None:
@@ -192,26 +226,19 @@ class ImageDetectiveGame:
                                image=self.photo, anchor=tk.CENTER)
     
     # Image Processing Methods
-    def add_motion_blur(self, image, length, angle):
-        # Create motion blur kernel
-        kernel = np.zeros((length, length))
-        kernel[int((length-1)/2), :] = np.ones(length)
-        kernel = kernel / length
-        
-        # Rotate kernel
-        M = cv2.getRotationMatrix2D((length/2, length/2), angle, 1)
-        kernel = cv2.warpAffine(kernel, M, (length, length))
-        
-        return cv2.filter2D(image, -1, kernel)
     
     def apply_gaussian_filter(self):
         if self.current_image is not None:
-            self.current_image = cv2.GaussianBlur(self.current_image, (5, 5), 1)
+            ksize = int(self.gaussian_slider.get())
+            if ksize % 2 == 0: ksize += 1  # Kernel size must be odd
+            self.current_image = cv2.GaussianBlur(self.current_image, (ksize, ksize), 1)
             self.display_image()
     
     def apply_median_filter(self):
         if self.current_image is not None:
-            self.current_image = cv2.medianBlur(self.current_image, 5)
+            ksize = int(self.median_slider.get())
+            if ksize % 2 == 0: ksize += 1
+            self.current_image = cv2.medianBlur(self.current_image, ksize)
             self.display_image()
     
     def apply_bilateral_filter(self):
@@ -241,7 +268,7 @@ class ImageDetectiveGame:
     
     def apply_gamma_correction(self):
         if self.current_image is not None:
-            gamma = 1.2  # Adjust as needed
+            gamma = float(self.gamma_slider.get())
             inv_gamma = 1.0 / gamma
             table = np.array([((i / 255.0) ** inv_gamma) * 255 
                             for i in np.arange(0, 256)]).astype("uint8")
