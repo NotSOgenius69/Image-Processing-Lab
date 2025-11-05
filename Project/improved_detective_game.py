@@ -17,7 +17,7 @@ class ClueHuntingGame:
         self.distorted_image = None
         self.current_image = None
         self.score = 0
-        self.max_levels = 5
+        self.max_levels = 3
         self.game_started = False
         
         self.image_history = []
@@ -33,6 +33,9 @@ class ClueHuntingGame:
         self.contrast_alpha = tk.DoubleVar(value=1.5)
         self.contrast_beta = tk.IntVar(value=30)
         
+        # For Level 3 encoding keys
+        self.encoded_images = {}  # Store encoded images with their keys
+        
         self.level_clues = {
             1: {
                 "question": "Find out the ID no",
@@ -40,24 +43,15 @@ class ClueHuntingGame:
                 "hint": "Hmmm...What can be the opposite of bluring? Maybe its sharpening."
             },
             2: {
-                "question": "What is the meeting date mentioned?",
-                "answer": "25th",
-                "hint": "Oh my god!This much noise.Suppress the noise maybe?"
+                "question": "Find out the codes from the image.",
+                "answer": "1234,5678",
+                "hint": "This much noise!!!Median Filter works well for salt pepper"
             },
             3: {
-                "question": "At which day is the meeting scheduled?",
+                "question": "Decode the image using the correct keys to reveal the meeting date!",
                 "answer": "Tuesday",
-                "hint": ""
-            },
-            4: {
-                "question": "Where is the meeting location?",
-                "answer": "conference room",
-                "hint": "Look for location details"
-            },
-            5: {
-                "question": "Who is the sender of this document?",
-                "answer": "michael smith",
-                "hint": "Look at the signature or FROM field"
+                "hint": "The image is encoded in frequency domain. You need TWO keys to decode it!Try the ones found in the previous image",
+                "keys": {"phase": 1234, "perm": 5678} 
             }
         }
 
@@ -193,6 +187,23 @@ class ClueHuntingGame:
         self.beta_label = ttk.Label(enhance_frame, text="30", font=("Arial", 8))
         self.beta_label.pack(anchor=tk.W, padx=5, pady=(0,5))
         
+        freq_frame = ttk.LabelFrame(tools_frame, text="Frequency Decoding", padding=5)
+        freq_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        ttk.Button(freq_frame, text="Decode Image with Keys", 
+                  command=self.decode_frequency_image).pack(fill=tk.X, pady=2)
+        ttk.Label(freq_frame, text="Enter phase & perm keys", font=("Arial", 7), 
+                 foreground="gray").pack(anchor=tk.W, padx=5)
+        
+        # Periodic Noise Removal Frame
+        periodic_frame = ttk.LabelFrame(tools_frame, text="Periodic Noise Removal", padding=5)
+        periodic_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        ttk.Button(periodic_frame, text="Auto Notch Filter", 
+                  command=self.apply_notch_filter).pack(fill=tk.X, pady=2)
+        ttk.Label(periodic_frame, text="Removes periodic patterns", font=("Arial", 7), 
+                 foreground="gray").pack(anchor=tk.W, padx=5)
+        
         control_frame = ttk.LabelFrame(tools_frame, text="Controls", padding=5)
         control_frame.pack(fill=tk.X, pady=(0, 10))
         
@@ -216,18 +227,26 @@ class ClueHuntingGame:
             "e:/Image Processing Lab/Project/Clue-1.png",
             "e:/Image Processing Lab/Project/Clue-2e.png", 
             "e:/Image Processing Lab/Project/Clue-3.png",
-            "e:/Image Processing Lab/Project/Clue-4-prev.png",
-            "e:/Image Processing Lab/Project/Clue-5.jpg",
         ]
         
-        for path in image_paths:
+        for idx, path in enumerate(image_paths):
+            if idx == 2:
+                img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
+                if img is not None:
+                    h, w = img.shape
+                    if h > 500 or w > 500:
+                        scale = min(500/h, 500/w)
+                        new_h, new_w = int(h*scale), int(w*scale)
+                        img = cv2.resize(img, (new_w, new_h))
+                    self.clue_images.append(img)
+            else:
                 img = cv2.imread(path)
                 if img is not None:
-                    h,w=img.shape[:2]
-                    if h>500 or w>500:
-                        scale=min(500/h, 500/w)
-                        new_h,new_w=int(h*scale),int(w*scale)
-                        img=cv2.resize(img,(new_w,new_h))
+                    h, w = img.shape[:2]
+                    if h > 500 or w > 500:
+                        scale = min(500/h, 500/w)
+                        new_h, new_w = int(h*scale), int(w*scale)
+                        img = cv2.resize(img, (new_w, new_h))
                     self.clue_images.append(img)
                 
         
@@ -239,12 +258,29 @@ class ClueHuntingGame:
             self.start_btn.config(text="Restart Game")
             self.level_label.config(text="1")
             self.score_label.config(text="0")
+            self.image_history.clear()  # Clear history on new game
+            self.encoded_images.clear()  # Clear encoded images
             self.load_level()
         else:
-            self.game_started = False
-            self.start_btn.config(text="Start Game")
-            self.canvas.delete("all")
-            self.question_label.config(text="Click Start Game to begin your detective mission!")
+            # Restart the game
+            self.end_game()
+            self.start_game()
+    
+    def end_game(self):
+        """End the current game and reset to initial state"""
+        self.game_started = False
+        self.current_level = 1
+        self.score = 0
+        self.current_image = None
+        self.original_image = None
+        self.distorted_image = None
+        self.image_history.clear()
+        self.encoded_images.clear()
+        self.start_btn.config(text="Start Game")
+        self.level_label.config(text="1")
+        self.score_label.config(text="0")
+        self.canvas.delete("all")
+        self.question_label.config(text="Click Start Game to begin your detective mission!")
     
     def load_level(self):
         if self.current_level<=len(self.clue_images):
@@ -262,29 +298,34 @@ class ClueHuntingGame:
         if self.current_level==1:
             img=cv2.GaussianBlur(img,(11, 11),1.8)
             img=cv2.convertScaleAbs(img,alpha=0.4,beta=10)
+        
             
         elif self.current_level==2:
-            img=cv2.convertScaleAbs(img, alpha=0.3, beta=-20)
-            noise=np.random.normal(0,20,img.shape).astype(np.int16)
-            img=np.clip(img.astype(np.int16)+noise,0,255).astype(np.uint8)
+            img=cv2.convertScaleAbs(img, alpha=0.4, beta=-30)
+    
+            s_vs_p = 0.5
+            amount = 0.04
+            noisy = img.copy()
+    
+            num_salt = np.ceil(amount * img.size * s_vs_p)
+            coords = [np.random.randint(0, i - 1, int(num_salt)) for i in img.shape[:2]]
+            noisy[coords[0], coords[1]] = 255
+    
+            num_pepper = np.ceil(amount * img.size * (1. - s_vs_p))
+            coords = [np.random.randint(0, i - 1, int(num_pepper)) for i in img.shape[:2]]
+            noisy[coords[0], coords[1]] = 0
+    
+            img = noisy
             
         elif self.current_level==3:
-            img=cv2.GaussianBlur(img, (5, 5), 5)
-            noise=np.random.normal(0,25,img.shape).astype(np.int16)
-            img=np.clip(img.astype(np.int16)+noise,0,255).astype(np.uint8)
+            img = self.encode_image_frequency(img, key_phase=1234, key_perm=5678)
+            
+            self.encoded_images[3] = {
+                'encoded_gray': img.copy(),
+                'keys': {'phase': 1234, 'perm': 5678}
+            }
            
             
-        elif self.current_level==4:
-            img=cv2.GaussianBlur(img,(5, 5),2.0)
-            noise=np.random.normal(0,15,img.shape).astype(np.int16)
-            img=np.clip(img.astype(np.int16)+noise,0,255).astype(np.uint8)
-            img=cv2.convertScaleAbs(img,alpha=0.3,beta=-30)
-            
-        else:
-            img=cv2.GaussianBlur(img,(9, 9),2.5)
-            noise=np.random.normal(0,45,img.shape).astype(np.int16)
-            img=np.clip(img.astype(np.int16)+noise,0,255).astype(np.uint8)
-            img=cv2.convertScaleAbs(img,alpha=0.35,beta=-40)
         
         self.distorted_image=img
         self.current_image=img.copy()
@@ -297,9 +338,12 @@ class ClueHuntingGame:
     def display_image(self):
         if self.current_image is None:
             return
-            
-        img_rgb = cv2.cvtColor(self.current_image, cv2.COLOR_BGR2RGB)
-        img_pil = Image.fromarray(img_rgb)
+        
+        if len(self.current_image.shape) == 2:
+            img_pil = Image.fromarray(self.current_image)
+        else:
+            img_rgb = cv2.cvtColor(self.current_image, cv2.COLOR_BGR2RGB)
+            img_pil = Image.fromarray(img_rgb)
         
         canvas_width = self.canvas.winfo_width()
         canvas_height = self.canvas.winfo_height()
@@ -414,6 +458,251 @@ class ClueHuntingGame:
             self.current_image = cv2.convertScaleAbs(self.current_image, alpha=alpha, beta=beta)
             self.display_image()
     
+    def encode_image_frequency(self, img, key_phase, key_perm):
+        M, N = img.shape
+        
+        F = np.fft.fft2(img)
+        F_shifted = np.fft.fftshift(F)
+
+        magnitude = np.abs(F_shifted)
+        phase = np.angle(F_shifted)
+
+        np.random.seed(key_phase)
+        phase_mask = np.random.uniform(0, 2*np.pi, (M, N))
+
+        encoded_phase = (phase + phase_mask) % (2*np.pi)
+
+        F_phase_encoded = magnitude * np.exp(1j * encoded_phase)
+
+        coeffs = F_phase_encoded.flatten()
+
+        np.random.seed(key_perm) 
+        perm = np.random.permutation(len(coeffs))
+        scrambled_coeffs = coeffs[perm]
+
+        F_encoded = scrambled_coeffs.reshape(M, N)
+
+        F_encoded_shifted = np.fft.ifftshift(F_encoded)
+        img_encoded = np.fft.ifft2(F_encoded_shifted).real
+        img_encoded = np.clip(img_encoded, 0, 255).astype(np.uint8)
+        
+        return img_encoded
+    
+    def decode_image_frequency(self, img_encoded, key_phase, key_perm):
+        M, N = img_encoded.shape
+        
+        F = np.fft.fft2(img_encoded)
+        F_shifted = np.fft.fftshift(F)
+        
+        coeffs = F_shifted.flatten()
+        np.random.seed(key_perm)
+        perm = np.random.permutation(len(coeffs))
+        inverse_perm = np.argsort(perm)
+        descrambled_coeffs = coeffs[inverse_perm].reshape(M, N)
+        
+        magnitude = np.abs(descrambled_coeffs)
+        phase = np.angle(descrambled_coeffs)
+        
+        np.random.seed(key_phase)
+        phase_mask = np.random.uniform(0, 2*np.pi, (M, N))
+        decoded_phase = (phase - phase_mask) % (2*np.pi)
+        
+        F_decoded = magnitude * np.exp(1j * decoded_phase)
+        F_decoded_shifted = np.fft.ifftshift(F_decoded)
+        img_decoded = np.fft.ifft2(F_decoded_shifted).real
+        img_decoded = np.clip(img_decoded, 0, 255).astype(np.uint8)
+        
+        return img_decoded
+    
+    def decode_frequency_image(self):
+        if self.current_image is None:
+            messagebox.showwarning("Warning", "No image to decode!")
+            return
+        
+        if self.current_level == 3 and 3 in self.encoded_images:
+            img_encoded = self.encoded_images[3]['encoded_gray']
+        else:
+            messagebox.showwarning("Error", "No encoded image found!")
+            return
+        
+        key_phase = simpledialog.askinteger("Phase Key", 
+                                           "Enter the phase encoding key (4 digits):",
+                                           minvalue=0, maxvalue=9999)
+        if key_phase is None:
+            return
+        
+        key_perm = simpledialog.askinteger("Permutation Key", 
+                                          "Enter the permutation key (4 digits):",
+                                          minvalue=0, maxvalue=9999)
+        if key_perm is None:
+            return
+        
+        try:
+            self.save_to_history()
+            decoded_img = self.decode_image_frequency(self.current_image, key_phase, key_perm)
+            self.current_image = decoded_img
+            self.display_image()
+            
+            if self.current_level == 3:
+                correct_keys = self.level_clues[3]["keys"]
+                if key_phase == correct_keys["phase"] and key_perm == correct_keys["perm"]:
+                    messagebox.showinfo("Success!", "Correct keys! The image has been decoded successfully!")
+                else:
+                    messagebox.showwarning("Incorrect Keys", 
+                                         f"Those keys didn't work correctly. Keep trying!\n"
+                                         f"(Hint: Both keys are 4-digit numbers)")
+        except Exception as e:
+            messagebox.showerror("Error", f"Decoding failed: {str(e)}")
+    
+    def detect_notch_points(self, magnitude_spectrum, threshold_percentile=99.5, min_distance=10):
+        """
+        Automatically detect notch points (periodic noise) in magnitude spectrum
+        
+        Parameters:
+        - magnitude_spectrum: FFT magnitude spectrum
+        - threshold_percentile: Percentile threshold to detect peaks (higher = fewer peaks)
+        - min_distance: Minimum distance between detected peaks
+        
+        Returns:
+        - notch_pairs: List of detected notch coordinates (excluding DC component)
+        """
+        center_u, center_v = magnitude_spectrum.shape[0]//2, magnitude_spectrum.shape[1]//2
+        
+        # Apply log transform for better visualization
+        mag_log = np.log(magnitude_spectrum + 1)
+        
+        # Set DC component to 0 to avoid detecting it
+        mag_log[center_u, center_v] = 0
+        
+        # Find threshold based on percentile
+        threshold = np.percentile(mag_log, threshold_percentile)
+        
+        # Find peaks above threshold
+        peaks = mag_log > threshold
+        
+        # Get coordinates of peaks
+        peak_coords = np.argwhere(peaks)
+        
+        # Filter out peaks too close to center (DC component)
+        notch_pairs = []
+        for coord in peak_coords:
+            u, v = coord[0], coord[1]
+            # Skip if too close to center
+            dist_from_center = np.sqrt((u - center_u)**2 + (v - center_v)**2)
+            if dist_from_center > min_distance:
+                notch_pairs.append((u, v))
+        
+        # Remove duplicates that are too close to each other
+        filtered_notches = []
+        for i, notch in enumerate(notch_pairs):
+            too_close = False
+            for existing in filtered_notches:
+                dist = np.sqrt((notch[0] - existing[0])**2 + (notch[1] - existing[1])**2)
+                if dist < min_distance:
+                    too_close = True
+                    break
+            if not too_close:
+                filtered_notches.append(notch)
+        
+        return filtered_notches
+
+    def calc_dist(self, u, v, notch):
+        """Calculate distance from point (u,v) to notch point"""
+        return np.sqrt((u - notch[0])**2 + (v - notch[1])**2)
+
+    def calc_HNR(self, shape, notch, anti_notch, D0k, n):
+        """Calculate notch reject filter for a notch pair"""
+        M, N = shape
+        u, v = np.meshgrid(np.arange(M), np.arange(N))
+
+        Dk = self.calc_dist(u, v, notch)
+        Dk_neg = self.calc_dist(u, v, anti_notch)
+
+        Dk = np.where(Dk == 0, 1e-10, Dk)
+        Dk_neg = np.where(Dk_neg == 0, 1e-10, Dk_neg)
+
+        H1 = 1.0 / (1.0 + (D0k / Dk)**(2*n))
+        H2 = 1.0 / (1.0 + (D0k / Dk_neg)**(2*n))
+
+        return H1 * H2
+
+    def gen_mask(self, shape, notch_pairs, anti_notch_pairs, D0k, n):
+        """Generate combined notch reject filter mask"""
+        mask = np.ones(shape, dtype=np.float64)
+
+        for notch, anti_notch in zip(notch_pairs, anti_notch_pairs):
+            HNR = self.calc_HNR(shape, notch, anti_notch, D0k, n)
+            mask *= HNR
+
+        return mask
+
+    def apply_notch_filter(self):
+        """Apply automatic notch filter to remove periodic noise"""
+        if self.current_image is None:
+            messagebox.showwarning("Warning", "No image loaded!")
+            return
+        
+        self.save_to_history()
+        
+        try:
+            # Handle both grayscale and color images
+            if len(self.current_image.shape) == 2:
+                # Grayscale image
+                filtered_img = self._apply_notch_to_channel(self.current_image)
+                self.current_image = filtered_img
+            else:
+                # Color image - process each channel
+                b, g, r = cv2.split(self.current_image)
+                filtered_channels = []
+                
+                for channel in [b, g, r]:
+                    filtered_channel = self._apply_notch_to_channel(channel)
+                    filtered_channels.append(filtered_channel)
+                
+                self.current_image = cv2.merge(filtered_channels)
+            
+            self.display_image()
+            messagebox.showinfo("Success", "Notch filter applied! Periodic noise removed.")
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Notch filter failed: {str(e)}")
+
+    def _apply_notch_to_channel(self, channel):
+        """Apply notch filter to a single channel"""
+        # FFT
+        ft = np.fft.fft2(channel)
+        ft_shift = np.fft.fftshift(ft)
+        magnitude = np.abs(ft_shift)
+        
+        # Auto-detect notch points
+        notch_pairs = self.detect_notch_points(magnitude, threshold_percentile=99.9, min_distance=10)
+        
+        if len(notch_pairs) == 0:
+            messagebox.showinfo("Info", "No significant periodic noise detected in this image.")
+            return channel
+        
+        # Calculate anti-notch pairs (symmetric points)
+        center_u, center_v = channel.shape[0]//2, channel.shape[1]//2
+        anti_notch_pairs = []
+        for notch in notch_pairs:
+            anti_notch_u = center_u - (notch[0] - center_u)
+            anti_notch_v = center_v - (notch[1] - center_v)
+            anti_notch_pairs.append((anti_notch_u, anti_notch_v))
+        
+        # Generate mask
+        D0k = 5  # Notch radius
+        n = 2    # Filter order
+        mask = self.gen_mask(channel.shape, notch_pairs, anti_notch_pairs, D0k, n)
+        
+        # Apply filter
+        filtered_ft = ft_shift * mask
+        filtered_ft_shift = np.fft.ifftshift(filtered_ft)
+        filtered_channel = np.fft.ifft2(filtered_ft_shift)
+        filtered_channel = np.real(filtered_channel)
+        filtered_channel = cv2.normalize(filtered_channel, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+        
+        return filtered_channel
+    
     def show_hint(self):
         if self.game_started and self.current_level in self.level_clues:
             hint = self.level_clues[self.current_level]["hint"]
@@ -453,11 +742,12 @@ class ClueHuntingGame:
             self.level_label.config(text=str(self.current_level))
             self.load_level()
         else:
+            # Game completed after level 3
+            max_score = self.max_levels * 100
+            
             messagebox.showinfo("Game Complete!", 
-                              f"Congratulations, Detective! You completed all levels!\nFinal Score: {self.score}/{self.max_levels * 100}")
-            self.game_started = False
-            self.start_btn.config(text="Start Game")
-            self.canvas.delete("all")
+                              f"Congratulations Detective!\n\nFinal Score: {self.score} / {max_score}\n\nClick 'Start Game' to play again!")
+            self.end_game()
 
 if __name__ == "__main__":
     root = tk.Tk()
